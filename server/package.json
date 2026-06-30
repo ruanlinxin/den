@@ -1,10 +1,10 @@
 {
-  "name": "server",
-  "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "name": "den-server",
+  "version": "1.0.0",
+  "description": "den HTTP server — SQLite 元信息 + 文件系统 blob 存储",
+  "author": "ruanlx",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

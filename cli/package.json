@@ -1,6 +1,6 @@
 {
   "name": "den-cli",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "den CLI client — push/list/get/remove text & files",
   "type": "module",
   "bin": {
