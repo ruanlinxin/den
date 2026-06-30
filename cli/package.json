@@ -1,0 +1,25 @@
+{
+  "name": "den-cli",
+  "version": "0.1.0",
+  "description": "den CLI client — push/list/get/remove text & files",
+  "type": "module",
+  "bin": {
+    "den": "./dist/den.cjs"
+  },
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' --outfile=dist/den.cjs && chmod +x dist/den.cjs",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/den.cjs"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.1",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
