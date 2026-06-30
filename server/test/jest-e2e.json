@@ -3,7 +3,27 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "setupFiles": ["<rootDir>/logger.setup.cjs"],
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": {
+          "module": "commonjs",
+          "moduleResolution": "node",
+          "esModuleInterop": true,
+          "emitDecoratorMetadata": true,
+          "experimentalDecorators": true,
+          "target": "ES2022",
+          "strictNullChecks": true,
+          "skipLibCheck": true,
+          "resolvePackageJsonExports": false,
+          "types": ["node", "jest"]
+        }
+      }
+    ]
+  },
+  "moduleNameMapper": {
+    "^nanoid$": "<rootDir>/mocks/nanoid.cjs"
   }
 }

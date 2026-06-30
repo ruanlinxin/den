@@ -24,6 +24,8 @@
 | skill | pi skill(`SKILL.md`) | AI 的操作手册,描述何时触发、调用哪些命令 |
 | ID | `nanoid` 8 位 | 短、无序、URL 友好 |
 | 鉴权 | Bearer / X-Den-Token | 单 token,`DEN_TOKEN` 环境变量为权威(未设时启动自动生成一次,打印到日志不落盘) |
+| 服务端配置 | `DEN_TOKEN` / `DEN_DATA_DIR` / `DEN_HOST` / `DEN_BODY_LIMIT` / `DEN_PURGE_INTERVAL_SEC` | 详见 `docs/api.md` 与 `server/src/main.ts` |
+| CLI 配置 | `DEN_URL` / `DEN_TOKEN` / `DEN_TIMEOUT_MS`(默认 30s) / `STASH_URL` / `STASH_TOKEN`(兼容) | 详见 `cli/src/cli.ts` |
 
 ## 目录结构
 

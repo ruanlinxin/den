@@ -132,7 +132,9 @@ curl -X POST http://<host>:<port>/den/file \
 
 **约束**
 
-- 当前实现文件完整读入内存（Multer memoryStorage）。**单文件上限 100MB**（服务端配置 `limits.fileSize`），超限返回 `413 Payload Too Large`；后续超大文件切换流式上传。
+- **请求体(body)上限 1MB**:`text` 路由与 file 路由的表单字段总和大于 1MB 时返回 `413 Payload Too Large`。环境变量 `DEN_BODY_LIMIT` 可调整(如 `'2mb'`、`'512kb'`)。
+- **单文件上限 100MB**:`POST /den/file` 超过此大小返回 `413`(服务端配置 `limits.fileSize`)。超过部分由 multer 限不读入内存。
+- 当前实现文件完整读入内存(Multer memoryStorage);后续超大文件(超过内存上限)需切换流式上传。
 
 ---
 

@@ -12,6 +12,7 @@ import {
   NotFoundException,
   StreamableFile,
   Header,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
@@ -45,6 +46,8 @@ function normalizeKind(v: unknown): Kind | undefined {
 
 @Controller('den')
 export class DenController {
+  private readonly logger = new Logger(DenController.name);
+
   constructor(private readonly store: DenStore) {}
 
   /** 推送文本 */
@@ -63,7 +66,11 @@ export class DenController {
 
   /** 推送文件(multipart) */
   @Post('file')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 100 * 1024 * 1024 }, // 100MB / 文件,与 api.md 一致
+    }),
+  )
   async pushFile(
     @UploadedFile() file: Express.Multer.File,
     @Body('source') source?: string,
@@ -110,7 +117,7 @@ export class DenController {
   @Header('Cache-Control', 'no-store')
   async content(
     @Param('id') id: string,
-    @Query('download') download: string,
+    @Query('download') download: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
     const entry = this.store.get(id);
@@ -126,6 +133,11 @@ export class DenController {
       'Content-Length': String(entry.size),
     });
     const stream = createReadStream(this.store.filePath(id));
+    // 防御性:existsSync 与 createReadStream 之间存在 TOCTOU 窗口;
+    // 进程被 kill -9 / 手动删 blob 时,这里捕获 error 避免 unhandled 'error' 事件。
+    stream.on('error', (e) => {
+      this.logger.error(`stream error on ${id}: ${e.message}`);
+    });
     return new StreamableFile(stream);
   }
 

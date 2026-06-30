@@ -1,5 +1,16 @@
 import { promises as fs } from 'node:fs';
-import { cmdPush, cmdRm, cmdTag, cmdLs, cmdGet, cmdConfig, loadConfig } from './cli';
+import { Readable } from 'node:stream';
+import {
+  cmdPush,
+  cmdRm,
+  cmdTag,
+  cmdLs,
+  cmdGet,
+  cmdConfig,
+  loadConfig,
+  readLine,
+  maskToken,
+} from './cli';
 
 const cfg = () => ({ url: 'http://srv:1', token: 'tok' });
 
@@ -19,10 +30,11 @@ function mockFetch(response: unknown) {
   return f;
 }
 
-/** mock process.exit:抛错以中断后续执行,便于断言 */
+/** mock process.exit:抛错以中断后续执行,便于断言
+ *  (jest.setup.cjs 已经全局替换为 throw '__EXIT_<code>__',这里保持同样约定) */
 function mockExit() {
   return jest.spyOn(process, 'exit').mockImplementation(((code = 0) => {
-    throw new Error(`EXIT_${code}`);
+    throw new Error(`__EXIT_${code}__`);
   }) as never);
 }
 
@@ -61,9 +73,7 @@ describe('命令函数', () => {
     });
 
     it('缺 -m 与文件 → exit(1)', async () => {
-      const exit = mockExit();
-      await expect(cmdPush(cfg(), [])).rejects.toThrow('EXIT_1');
-      expect(exit).toHaveBeenCalledWith(1);
+      await expect(cmdPush(cfg(), [])).rejects.toThrow('__EXIT_1__');
     });
   });
 
@@ -72,15 +82,115 @@ describe('命令函数', () => {
   describe('cmdRm', () => {
     it('DELETE /den/:id', async () => {
       const f = mockFetch({ ok: true });
-      await cmdRm(cfg(), ['abc']);
+      await cmdRm(cfg(), ['abc', '--yes']);
       const [url, init] = f.mock.calls[0] as [string, RequestInit];
       expect(url).toBe('http://srv:1/den/abc');
       expect(init.method).toBe('DELETE');
     });
 
     it('缺 id → exit(1)', async () => {
-      mockExit();
-      await expect(cmdRm(cfg(), [])).rejects.toThrow('EXIT_1');
+      await expect(cmdRm(cfg(), [])).rejects.toThrow('__EXIT_1__');
+    });
+
+    it('--yes 跳过确认,直接发 DELETE', async () => {
+      const f = mockFetch({ ok: true });
+      await cmdRm(cfg(), ['abc', '--yes']);
+      expect(f).toHaveBeenCalledTimes(1);
+      expect((f.mock.calls[0] as [string, RequestInit])[0]).toBe('http://srv:1/den/abc');
+    });
+
+    it('非 TTY 无 --yes → 拒绝(不发送 DELETE)', async () => {
+      const orig = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+      Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+      const f = mockFetch({ ok: true });
+      try {
+        await expect(cmdRm(cfg(), ['abc'])).rejects.toThrow('__EXIT_1__');
+        expect(f).not.toHaveBeenCalled();
+      } finally {
+        if (orig) Object.defineProperty(process.stdin, 'isTTY', orig);
+      }
+    });
+
+    it('TTY:输入 y → 发 DELETE', async () => {
+      const orig = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+      const f = jest
+        .fn()
+        .mockResolvedValueOnce(
+          resOk({ id: 'abc', kind: 'text', name: 'text.txt', size: 3, createdAt: 1, tags: [], expiresAt: null }),
+        )
+        .mockResolvedValueOnce(resOk({ ok: true }));
+      (globalThis as { fetch: unknown }).fetch = f;
+      // 直接喂 stdin:readLine 监听 'data' 事件,遇到 \n resolve。
+      // 用 setImmediate 推迟到 cmdRm 进入 readLine 之后
+      setImmediate(() => process.stdin.emit('data', 'y\n'));
+      try {
+        await cmdRm(cfg(), ['abc']);
+        expect(f).toHaveBeenCalledTimes(2);
+        expect((f.mock.calls[1] as [string, RequestInit])[0]).toBe('http://srv:1/den/abc');
+      } finally {
+        if (orig) Object.defineProperty(process.stdin, 'isTTY', orig);
+      }
+    });
+
+    it('TTY:输入 n → 取消,不发送 DELETE', async () => {
+      const orig = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+      const f = jest.fn().mockResolvedValueOnce(
+        resOk({ id: 'abc', kind: 'text', name: 'text.txt', size: 3, createdAt: 1, tags: [], expiresAt: null }),
+      );
+      (globalThis as { fetch: unknown }).fetch = f;
+      setImmediate(() => process.stdin.emit('data', 'n\n'));
+      try {
+        await cmdRm(cfg(), ['abc']);
+        expect(f).toHaveBeenCalledTimes(1); // 只调了 GET,没 DELETE
+        expect(logSpy).toHaveBeenCalledWith('已取消');
+      } finally {
+        if (orig) Object.defineProperty(process.stdin, 'isTTY', orig);
+      }
+    });
+  });
+
+  // ---------- maskToken ----------
+
+  describe('maskToken', () => {
+    it('前 2 字符 + ***', () => {
+      expect(maskToken('abcdef')).toBe('ab***');
+      expect(maskToken('xyz12345token')).toBe('xy***');
+    });
+    it('短 token 保留首字符', () => {
+      expect(maskToken('a')).toBe('a***');
+      expect(maskToken('ab')).toBe('a***');
+    });
+    it('空值返回占位', () => {
+      expect(maskToken('')).toBe('(未设置)');
+    });
+  });
+
+  // ---------- readLine ----------
+
+  describe('readLine', () => {
+    afterEach(() => {
+      // 恢复 stdin 状态
+      process.stdin.removeAllListeners('data');
+      process.stdin.removeAllListeners('end');
+    });
+
+    it('读到 \\n 即返回该行', async () => {
+      const p = readLine();
+      process.stdin.emit('data', 'hello\n');
+      await expect(p).resolves.toBe('hello');
+    });
+    it('去首尾空白', async () => {
+      const p = readLine();
+      process.stdin.emit('data', '  yes  \n');
+      await expect(p).resolves.toBe('yes');
+    });
+    it('EOF 时返回剩余内容', async () => {
+      const p = readLine();
+      process.stdin.emit('data', 'partial');
+      process.stdin.emit('end');
+      await expect(p).resolves.toBe('partial');
     });
   });
 
@@ -106,7 +216,7 @@ describe('命令函数', () => {
 
     it('用法不全 → exit(1)', async () => {
       mockExit();
-      await expect(cmdTag(cfg(), ['abc'])).rejects.toThrow('EXIT_1');
+      await expect(cmdTag(cfg(), ['abc'])).rejects.toThrow('__EXIT_1__');
     });
   });
 
@@ -178,20 +288,20 @@ describe('命令函数', () => {
     it('无 url/token → exit(1)', async () => {
       jest.spyOn(fs, 'readFile').mockRejectedValue(new Error('no rc'));
       mockExit();
-      await expect(loadConfig()).rejects.toThrow('EXIT_1');
+      await expect(loadConfig()).rejects.toThrow('__EXIT_1__');
     });
   });
 
   // ---------- cmdConfig ----------
 
   describe('cmdConfig', () => {
-    it('show: 读取并打印 rc', async () => {
+    it('show: token 打码(只露前 2 字符)', async () => {
       jest.spyOn(fs, 'readFile').mockResolvedValue(
-        JSON.stringify({ url: 'http://h', token: 't' }),
+        JSON.stringify({ url: 'http://h', token: 'supersecrettoken' }),
       );
       await cmdConfig(['show']);
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('http://h'));
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('token: t'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('token: su***'));
+      expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('supersecret'));
     });
 
     it('show: 无 rc → 打印提示', async () => {
@@ -214,12 +324,12 @@ describe('命令函数', () => {
     it('set: 缺 token → exit(1)', async () => {
       jest.spyOn(fs, 'readFile').mockRejectedValue(new Error('no'));
       mockExit();
-      await expect(cmdConfig(['set', '--url', 'http://h:1'])).rejects.toThrow('EXIT_1');
+      await expect(cmdConfig(['set', '--url', 'http://h:1'])).rejects.toThrow('__EXIT_1__');
     });
 
     it('未知子命令 → exit(1)', async () => {
       mockExit();
-      await expect(cmdConfig(['weird'])).rejects.toThrow('EXIT_1');
+      await expect(cmdConfig(['weird'])).rejects.toThrow('__EXIT_1__');
     });
   });
 

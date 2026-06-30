@@ -1,10 +1,11 @@
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BadRequestException, NotFoundException, StreamableFile } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException, StreamableFile } from '@nestjs/common';
 import { DenController } from './den.controller';
 import { DenStore } from './store';
 import type { Entry } from './types';
+import type { Response } from 'express';
 
 type MockedStore = jest.Mocked<DenStore>;
 
@@ -33,15 +34,23 @@ const fakeEntry = (over: Partial<Entry> = {}): Entry => ({
   ...over,
 });
 
-const mkRes = () => ({ set: jest.fn() }) as never;
+const mkRes = () => ({ set: jest.fn() }) as unknown as Response;
 
 describe('DenController', () => {
   let controller: DenController;
   let store: MockedStore;
+  let errorSpy: jest.SpyInstance;
 
   beforeEach(() => {
     store = mockStore();
     controller = new DenController(store);
+    // controller.content() 创建 ReadStream 后立即返回 StreamableFile,测试不消费
+    // 导致 GC 时 stream 关闭抛 ENOENT(防御性 error handler 会打日志,这里静默掉)
+    errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
   });
 
   // ---------- pushText ----------
