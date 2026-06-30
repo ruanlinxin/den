@@ -1,8 +1,8 @@
 /**
  * den CLI — 纯 TS 客户端,零运行时依赖(仅 Node 内置 fetch/fs/crypto)
  *
- * 配置:~/.denrc (JSON { url, token }),环境变量 DEN_URL / DEN_TOKEN 覆盖。
- * 向后兼容:若无 ~/.denrc 则回退读 ~/.stashrc;STASH_URL / STASH_TOKEN 仍生效。
+ * 配置:~/.config/den/config.json (JSON { url, token }),环境变量 DEN_URL / DEN_TOKEN 覆盖。
+ * 向后兼容:若无配置文件则回退读 ~/.stashrc;STASH_URL / STASH_TOKEN 仍生效。
  *
  * 命令(对齐 docs/api.md):
  *   den push -m "<文本>" [--ttl 1h] [--tags a,b] [--source <host>]
@@ -20,7 +20,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-const RCPATH = path.join(os.homedir(), '.denrc');
+const RCPATH = path.join(os.homedir(), '.config', 'den', 'config.json');
 const LEGACY_RCPATH = path.join(os.homedir(), '.stashrc');
 
 export interface Config {
@@ -243,7 +243,7 @@ export async function cmdPush(cfg: Config, args: string[]): Promise<void> {
       console.error('[den] 文本不能为空');
       process.exit(1);
     }
-    entry = await sendJson(cfg, 'POST', '/stash/text', { text, source, ttl, tags });
+    entry = await sendJson(cfg, 'POST', '/den/text', { text, source, ttl, tags });
   } else {
     const file = positional[0];
     if (!file) {
@@ -256,7 +256,7 @@ export async function cmdPush(cfg: Config, args: string[]): Promise<void> {
     form.append('source', source);
     if (ttl) form.append('ttl', String(ttl));
     if (tags) form.append('tags', tags.join(','));
-    const res = await request(cfg, 'POST', '/stash/file', { body: form });
+    const res = await request(cfg, 'POST', '/den/file', { body: form });
     entry = await readJson(res);
   }
   console.log(`${entry.id}  (${entry.kind}, ${humanSize(entry.size)})`);
@@ -271,7 +271,7 @@ export async function cmdLs(cfg: Config, args: string[]): Promise<void> {
   if (opts['--source']) q.set('source', opts['--source']);
   if (opts['--tag']) q.set('tag', opts['--tag']);
   const qs = q.toString();
-  const list = (await sendJson(cfg, 'GET', `/stash${qs ? `?${qs}` : ''}`, undefined)) as Entry[];
+  const list = (await sendJson(cfg, 'GET', `/den${qs ? `?${qs}` : ''}`, undefined)) as Entry[];
   if (!list.length) {
     console.log('(空)');
     return;
@@ -291,8 +291,8 @@ export async function cmdGet(cfg: Config, args: string[]): Promise<void> {
     console.error('[den] 用法: den get <id> [-o <path>]');
     process.exit(1);
   }
-  const entry = (await sendJson(cfg, 'GET', `/stash/${id}`, undefined)) as Entry;
-  const res = await request(cfg, 'GET', `/stash/${id}/content`, {});
+  const entry = (await sendJson(cfg, 'GET', `/den/${id}`, undefined)) as Entry;
+  const res = await request(cfg, 'GET', `/den/${id}/content`, {});
   if (!res.ok) {
     await readJson(res); // 报错退出
     return;
@@ -315,7 +315,7 @@ export async function cmdRm(cfg: Config, args: string[]): Promise<void> {
     console.error('[den] 用法: den rm <id>');
     process.exit(1);
   }
-  await sendJson(cfg, 'DELETE', `/stash/${id}`, undefined);
+  await sendJson(cfg, 'DELETE', `/den/${id}`, undefined);
   console.log(`已删除 ${id}`);
 }
 
@@ -329,10 +329,10 @@ export async function cmdTag(cfg: Config, args: string[]): Promise<void> {
   }
   if (op === 'add') {
     const tags = parseTags(rest) ?? [];
-    const entry = await sendJson(cfg, 'POST', `/stash/${id}/tags`, { tags });
+    const entry = await sendJson(cfg, 'POST', `/den/${id}/tags`, { tags });
     console.log(`${entry.id}  tags: ${(entry.tags ?? []).join(', ') || '(无)'}`);
   } else {
-    const entry = await sendJson(cfg, 'DELETE', `/stash/${id}/tags/${encodeURIComponent(rest)}`, undefined);
+    const entry = await sendJson(cfg, 'DELETE', `/den/${id}/tags/${encodeURIComponent(rest)}`, undefined);
     console.log(`${entry.id}  tags: ${(entry.tags ?? []).join(', ') || '(无)'}`);
   }
 }
@@ -342,7 +342,7 @@ export async function cmdConfig(args: string[]): Promise<void> {
   if (sub === 'show') {
     const rc = await readRc();
     if (!rc.url && !rc.token) {
-      console.log('(无 ~/.denrc)');
+      console.log('(无 ~/.config/den/config.json)');
       return;
     }
     console.log(`url:   ${rc.url ?? '(未设置)'}`);
@@ -358,6 +358,7 @@ export async function cmdConfig(args: string[]): Promise<void> {
       console.error('[den] config set 需要同时提供 --url 与 --token');
       process.exit(1);
     }
+    await fs.mkdir(path.dirname(RCPATH), { recursive: true });
     await fs.writeFile(RCPATH, JSON.stringify(rc, null, 2) + '\n', { mode: 0o600 });
     console.log(`已写入 ${RCPATH}`);
     return;

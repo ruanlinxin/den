@@ -2,31 +2,31 @@ import { Test } from '@nestjs/testing';
 import { tmpdir } from 'node:os';
 import { mkdtemp, rm, readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
-import { StashStore } from './store';
+import { DenStore } from './store';
 import type { Entry } from './types';
 
 /**
- * StashStore 单元测试:用真实 SQLite + 临时目录(每个用例独立 dataDir)。
+ * DenStore 单元测试:用真实 SQLite + 临时目录(每个用例独立 dataDir)。
  * 不 mock 数据库,保证 SQL/事务/级联/WAL 行为被真实覆盖。
  */
-describe('StashStore', () => {
-  let store: StashStore;
+describe('DenStore', () => {
+  let store: DenStore;
   let dataDir: string;
 
   beforeEach(async () => {
     dataDir = await mkdtemp(join(tmpdir(), 'stash-test-'));
-    process.env.STASH_DATA_DIR = dataDir;
-    process.env.STASH_PURGE_INTERVAL_SEC = '3600'; // 测试期间不跑定时清理
-    const modRef = await Test.createTestingModule({ providers: [StashStore] }).compile();
-    store = modRef.get(StashStore);
+    process.env.DEN_DATA_DIR = dataDir;
+    process.env.DEN_PURGE_INTERVAL_SEC = '3600'; // 测试期间不跑定时清理
+    const modRef = await Test.createTestingModule({ providers: [DenStore] }).compile();
+    store = modRef.get(DenStore);
     await store.onModuleInit();
   });
 
   afterEach(async () => {
     jest.restoreAllMocks();
     store.onModuleDestroy();
-    delete process.env.STASH_DATA_DIR;
-    delete process.env.STASH_PURGE_INTERVAL_SEC;
+    delete process.env.DEN_DATA_DIR;
+    delete process.env.DEN_PURGE_INTERVAL_SEC;
     await rm(dataDir, { recursive: true, force: true });
   });
 

@@ -1,4 +1,4 @@
-# stash · 数据模型
+# den · 数据模型
 
 > 当前实现:**SQLite(`better-sqlite3`)+ 文件系统 blob**。
 > SQLite 存元信息与标签,blob(原始文件字节)始终留文件系统,避免大文件拖慢查询与备份。
@@ -6,10 +6,10 @@
 ## 1. 存储形态
 
 ```
-~/.stash/                       ← 数据根(STASH_DATA_DIR 可覆盖)
-├── stash.db                    ← SQLite 主库(entries + entry_tags)
-├── stash.db-wal                ← WAL 日志(better-sqlite3 开启 WAL)
-├── stash.db-shm                ← 共享内存索引
+~/.local/share/den/                       ← 数据根(DEN_DATA_DIR 可覆盖)
+├── den.db                    ← SQLite 主库(entries + entry_tags)
+├── den.db-wal                ← WAL 日志(better-sqlite3 开启 WAL)
+├── den.db-shm                ← 共享内存索引
 └── files/                      ← 原始文件字节(text 也存成文件)
     ├── aB3xK9pQ
     └── Mn2vR8wL
@@ -90,7 +90,7 @@ CREATE INDEX idx_tags_tag ON entry_tags (tag);
 
 - **并发写**:`better-sqlite3` 是同步 API,所有 DB 操作在单线程内天然串行,无需额外队列。
 - **原子性**:写 blob → 成功后单事务内 `INSERT entries` + `INSERT entry_tags`;删除先 `DELETE entries`(cascade 清标签)再删 blob。
-- **崩溃恢复**:WAL 模式下进程崩溃不损坏库;SQLite 自带完整性,无需手工 fail-fast(区别于旧 `index.json` 方案)。若 `stash.db` 物理损坏,从冷备恢复。
+- **崩溃恢复**:WAL 模式下进程崩溃不损坏库;SQLite 自带完整性,无需手工 fail-fast(区别于旧 `index.json` 方案)。若 `den.db` 物理损坏,从冷备恢复。
 - **blob 一致性**:若 entry 引用了不存在的 blob,`GET /:id/content` 返回 404,元信息不受损。
 
 ## 5. 关键语义
@@ -100,7 +100,7 @@ CREATE INDEX idx_tags_tag ON entry_tags (tag);
 - **TTL 过期**:
   - 推送时收 `ttl`(秒)→ 存 `expires_at = now + ttl*1000`(ms)。
   - **惰性过滤**:`list` / `get` 查询时用 `(expires_at IS NULL OR expires_at > now)` 自动隐藏已过期项(过期即不可见,等同删除的可见效果)。
-  - **物理清理**:后台定时任务(默认每 60s,`STASH_PURGE_INTERVAL_SEC` 可调)执行 `purgeExpired()`,删除 `expires_at <= now` 的条目与 blob,回收磁盘。
+  - **物理清理**:后台定时任务(默认每 60s,`DEN_PURGE_INTERVAL_SEC` 可调)执行 `purgeExpired()`,删除 `expires_at <= now` 的条目与 blob,回收磁盘。
 - **标签规范化**:`trim` + 去重 + 排序;空字符串忽略。
 
 ## 6. 量级与扩展
@@ -110,6 +110,6 @@ CREATE INDEX idx_tags_tag ON entry_tags (tag);
 
 ## 7. 备份
 
-- `rsync -a ~/.stash/ backup/` 即完整备份(含 `stash.db*` 与 `files/`)。
+- `rsync -a ~/.local/share/den/ backup/` 即完整备份(含 `den.db*` 与 `files/`)。
 - SQLite 文件热备份也可用 `better-sqlite3` 的 `.backup()` 在线导出,避免 WAL 中途状态;个人量级直接 rsync 足够。
 - 建议定时 rsync 到极空间 NAS 或其他冷备。

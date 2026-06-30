@@ -46,11 +46,11 @@ describe('命令函数', () => {
   // ---------- cmdPush ----------
 
   describe('cmdPush', () => {
-    it('推送文本:正确构造 POST /stash/text(含 ttl/tags)', async () => {
+    it('推送文本:正确构造 POST /den/text(含 ttl/tags)', async () => {
       const f = mockFetch({ id: 'abc', kind: 'text', name: 'text.txt', size: 2, createdAt: 1, tags: [], expiresAt: null });
       await cmdPush(cfg(), ['-m', 'hi', '--tags', 'a,b', '--source', 'mac', '--ttl', '1h']);
       const [url, init] = f.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('http://srv:1/stash/text');
+      expect(url).toBe('http://srv:1/den/text');
       expect(init.method).toBe('POST');
       expect(JSON.parse(init.body as string)).toEqual({
         text: 'hi',
@@ -70,11 +70,11 @@ describe('命令函数', () => {
   // ---------- cmdRm ----------
 
   describe('cmdRm', () => {
-    it('DELETE /stash/:id', async () => {
+    it('DELETE /den/:id', async () => {
       const f = mockFetch({ ok: true });
       await cmdRm(cfg(), ['abc']);
       const [url, init] = f.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('http://srv:1/stash/abc');
+      expect(url).toBe('http://srv:1/den/abc');
       expect(init.method).toBe('DELETE');
     });
 
@@ -87,20 +87,20 @@ describe('命令函数', () => {
   // ---------- cmdTag ----------
 
   describe('cmdTag', () => {
-    it('add:POST /stash/:id/tags', async () => {
+    it('add:POST /den/:id/tags', async () => {
       const f = mockFetch({ id: 'abc', tags: ['x', 'y'] });
       await cmdTag(cfg(), ['abc', 'add', 'x,y']);
       const [url, init] = f.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('http://srv:1/stash/abc/tags');
+      expect(url).toBe('http://srv:1/den/abc/tags');
       expect(init.method).toBe('POST');
       expect(JSON.parse(init.body as string)).toEqual({ tags: ['x', 'y'] });
     });
 
-    it('rm:DELETE /stash/:id/tags/:tag(URL 编码)', async () => {
+    it('rm:DELETE /den/:id/tags/:tag(URL 编码)', async () => {
       const f = mockFetch({ id: 'abc', tags: [] });
       await cmdTag(cfg(), ['abc', 'rm', '中 文']);
       const [url, init] = f.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('http://srv:1/stash/abc/tags/' + encodeURIComponent('中 文'));
+      expect(url).toBe('http://srv:1/den/abc/tags/' + encodeURIComponent('中 文'));
       expect(init.method).toBe('DELETE');
     });
 
@@ -113,13 +113,13 @@ describe('命令函数', () => {
   // ---------- cmdLs ----------
 
   describe('cmdLs', () => {
-    it('GET /stash 带 query(kind/tag/source)', async () => {
+    it('GET /den 带 query(kind/tag/source)', async () => {
       const f = mockFetch([
         { id: 'a', kind: 'text', name: 'text.txt', size: 1, createdAt: 1, tags: [], expiresAt: null },
       ]);
       await cmdLs(cfg(), ['--tag', 'note', '--kind', 'text', '--source', 'mac']);
       const url = (f.mock.calls[0] as [string, RequestInit])[0];
-      expect(url).toContain('/stash?');
+      expect(url).toContain('/den?');
       expect(url).toContain('tag=note');
       expect(url).toContain('kind=text');
       expect(url).toContain('source=mac');
@@ -138,9 +138,9 @@ describe('命令函数', () => {
     it('文本:第一次取 meta,第二次取 content,打印到 stdout', async () => {
       const f = jest
         .fn()
-        // GET /stash/:id → entry meta
+        // GET /den/:id → entry meta
         .mockResolvedValueOnce(resOk({ id: 'a', kind: 'text', name: 'text.txt', size: 3, createdAt: 1, tags: [], expiresAt: null }))
-        // GET /stash/:id/content → 正文
+        // GET /den/:id/content → 正文
         .mockResolvedValueOnce({ ok: true, status: 200, text: () => Promise.resolve('hi\n') });
       (globalThis as { fetch: unknown }).fetch = f;
       const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -197,7 +197,7 @@ describe('命令函数', () => {
     it('show: 无 rc → 打印提示', async () => {
       jest.spyOn(fs, 'readFile').mockRejectedValue(new Error('no'));
       await cmdConfig(['show']);
-      expect(logSpy).toHaveBeenCalledWith('(无 ~/.denrc)');
+      expect(logSpy).toHaveBeenCalledWith('(无 ~/.config/den/config.json)');
     });
 
     it('set: 写入 rc', async () => {
@@ -236,11 +236,11 @@ describe('命令函数', () => {
         tags: [],
         expiresAt: null,
       });
-      const tmpf = '/tmp/stash-cli-pushtest.txt';
+      const tmpf = '/tmp/den-cli-pushtest.txt';
       await fs.writeFile(tmpf, 'X');
       await cmdPush(cfg(), [tmpf, '--tags', 'doc', '--source', 'mac']);
       const [url, init] = f.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('http://srv:1/stash/file');
+      expect(url).toBe('http://srv:1/den/file');
       expect(init.method).toBe('POST');
       expect(init.body).toBeInstanceOf(FormData);
       await fs.unlink(tmpf);
@@ -259,7 +259,7 @@ describe('命令函数', () => {
         });
       (globalThis as { fetch: unknown }).fetch = f;
       const wf = jest.spyOn(fs, 'writeFile').mockResolvedValue();
-      await cmdGet(cfg(), ['f', '-o', '/tmp/stash-cli-out.txt']);
+      await cmdGet(cfg(), ['f', '-o', '/tmp/den-cli-out.txt']);
       expect(wf).toHaveBeenCalled();
     });
   });

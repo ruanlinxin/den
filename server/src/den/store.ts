@@ -12,11 +12,11 @@ import { nanoid } from 'nanoid';
 import type { Entry, Kind, ListFilter } from './types';
 
 /**
- * StashStore — SQLite 单后端存储
+ * DenStore — SQLite 单后端存储
  *
  * 目录结构(默认 ~/.stash):
- *   ~/.stash/
- *   ├── stash.db         SQLite 数据库(元信息 + 标签)
+ *   ~/.local/share/den/
+ *   ├── den.db         SQLite 数据库(元信息 + 标签)
  *   └── files/<id>       原始文件字节(text 也存成文件,blob 始终留文件系统)
  *
  * 设计要点:
@@ -26,8 +26,8 @@ import type { Entry, Kind, ListFilter } from './types';
  * - TTL:列 expires_at(ms),查询惰性过滤(已过期视为不存在),purgeExpired() 物理清理
  */
 @Injectable()
-export class StashStore implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(StashStore.name);
+export class DenStore implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(DenStore.name);
   private db!: InstanceType<typeof Database>;
   private timer?: NodeJS.Timeout;
   private readonly dataDir: string;
@@ -37,9 +37,9 @@ export class StashStore implements OnModuleInit, OnModuleDestroy {
   private static readonly MAX_ID_RETRIES = 8;
 
   constructor() {
-    this.dataDir = process.env.STASH_DATA_DIR ?? path.join(os.homedir(), '.stash');
+    this.dataDir = process.env.DEN_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'den');
     this.filesDir = path.join(this.dataDir, 'files');
-    this.dbPath = path.join(this.dataDir, 'stash.db');
+    this.dbPath = path.join(this.dataDir, 'den.db');
   }
 
   async onModuleInit() {
@@ -70,7 +70,7 @@ export class StashStore implements OnModuleInit, OnModuleDestroy {
       .prepare('SELECT COUNT(*) AS n FROM entries')
       .get() as { n: number };
     this.logger.log(`SQLite ready at ${this.dbPath} (${n} entries).`);
-    const intervalSec = Math.max(1, Number(process.env.STASH_PURGE_INTERVAL_SEC ?? 60));
+    const intervalSec = Math.max(1, Number(process.env.DEN_PURGE_INTERVAL_SEC ?? 60));
     this.timer = setInterval(() => this.purgeExpired(), intervalSec * 1000);
     this.timer.unref?.();
   }
@@ -110,7 +110,7 @@ export class StashStore implements OnModuleInit, OnModuleDestroy {
   /** 生成不冲突的 nanoid(8) */
   private genId(): string {
     const stmt = this.db.prepare('SELECT 1 FROM entries WHERE id = ?');
-    for (let i = 0; i < StashStore.MAX_ID_RETRIES; i++) {
+    for (let i = 0; i < DenStore.MAX_ID_RETRIES; i++) {
       const id = nanoid(8);
       if (!stmt.get(id)) return id;
     }
@@ -167,8 +167,8 @@ export class StashStore implements OnModuleInit, OnModuleDestroy {
     const id = this.genId();
     await fs.writeFile(this.filePath(id), buf);
     const createdAt = Date.now();
-    const expiresAt = StashStore.ttlToExpiresAt(ttl);
-    const normTags = StashStore.normalizeTags(tags);
+    const expiresAt = DenStore.ttlToExpiresAt(ttl);
+    const normTags = DenStore.normalizeTags(tags);
     const insert = this.db.transaction(() => {
       this.db
         .prepare(
@@ -280,7 +280,7 @@ export class StashStore implements OnModuleInit, OnModuleDestroy {
   /** 给条目追加标签(已存在则忽略),返回最新标签列表 */
   addTags(id: string, tags: string[]): string[] {
     if (!this.exists(id)) return [];
-    const norm = StashStore.normalizeTags(tags);
+    const norm = DenStore.normalizeTags(tags);
     if (norm.length > 0) {
       this.writeTags(id, norm);
     }

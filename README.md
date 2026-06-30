@@ -20,7 +20,7 @@
 cd server
 npm install
 npm run start:dev          # 热重载开发
-# 生产:PORT=8080 STASH_TOKEN=xxx npm start
+# 生产:PORT=8080 DEN_TOKEN=xxx npm start
 ```
 
 ### CLI
@@ -50,4 +50,4 @@ ln -sf "$PWD/skill" ~/.agents/skills/den   # 让 pi 发现
 
 ## 鉴权
 
-单 Bearer token,服务端从 `STASH_TOKEN` 环境变量读取(未设时启动自动生成一次)。CLI 通过 `den config set` 或环境变量 `DEN_URL` / `DEN_TOKEN` 配置。
+单 Bearer token,服务端从 `DEN_TOKEN` 环境变量读取(未设时启动自动生成一次)。CLI 通过 `den config set` 或环境变量 `DEN_URL` / `DEN_TOKEN` 配置。

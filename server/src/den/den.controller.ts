@@ -16,7 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
 import type { Response } from 'express';
-import { StashStore } from './store';
+import { DenStore } from './store';
 import type { CreateTextDto, Kind, ListFilter } from './types';
 
 /** 把 multipart 表单字段或 JSON 字段统一解析成 ttl 秒数 */
@@ -43,9 +43,9 @@ function normalizeKind(v: unknown): Kind | undefined {
   return v === 'text' || v === 'file' ? (v as Kind) : undefined;
 }
 
-@Controller('stash')
-export class StashController {
-  constructor(private readonly store: StashStore) {}
+@Controller('den')
+export class DenController {
+  constructor(private readonly store: DenStore) {}
 
   /** 推送文本 */
   @Post('text')

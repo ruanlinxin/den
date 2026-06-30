@@ -1,4 +1,4 @@
-# stash · 设计文档
+# den · 设计文档
 
 ## 1. 背景与目标
 
@@ -27,7 +27,7 @@
 
 ## 2. 整体架构
 
-stash 由三个物理组件构成 **server / cli / skill**,形成完整闭环:
+den 由三个物理组件构成 **server / cli / skill**,形成完整闭环:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -45,13 +45,13 @@ stash 由三个物理组件构成 **server / cli / skill**,形成完整闭环:
 │    │     SKILL.md     │                   │                   │
 │    │                  │  HTTP + Bearer Token                  │
 │    │            ┌─────▼──────┐                             │
-│    └───────────►│ stash server│  ← 监听 <tailscale-ip>:<port>      │
+│    └───────────►│ den server│  ← 监听 <tailscale-ip>:<port>      │
 │                 │  (NestJS)   │                             │
 │                 └─────┬──────┘                             │
 │                       │                                    │
 │                 ┌─────▼──────┐                             │
-│                 │ ~/.stash/   │  ← SQLite + 文件系统             │
-│                 │  stash.db    │                             │
+│                 │ ~/.local/share/den/   │  ← SQLite + 文件系统             │
+│                 │  den.db    │                             │
 │                 │  files/<id> │                             │
 │                 └─────────────┘                             │
 └─────────────────────────────────────────────────────────────┘
@@ -63,14 +63,14 @@ stash 由三个物理组件构成 **server / cli / skill**,形成完整闭环:
 |---|---|---|
 | **server** | `server/` | NestJS 服务端:路由、鉴权、请求解析、元信息维护、blob 落盘、并发控制 |
 | **cli** | `cli/` | 纯 TS 客户端:命令行交互(`push`/`ls`/`get`/`rm`)、HTTP 调用、文件读写。零运行时依赖 |
-| **skill** | `skill/SKILL.md` | pi skill:AI 读取后知道**何时触发**、**调用哪些 cli 命令**,实现 AI 驱动 stash |
+| **skill** | `skill/SKILL.md` | pi skill:AI 读取后知道**何时触发**、**调用哪些 cli 命令**,实现 AI 驱动 den |
 
 ### 闭环说明
 
-1. **AI 读 skill**:当用户说"把这段文字存起来"/"看看 stash 里有什么",pi 匹配到 `skill/SKILL.md` 的 description,加载完整手册。
-2. **AI 调 cli**:按手册执行 `stash push ...` / `stash ls` 等。
-3. **cli 打 server**:cli 读 `~/.stashrc` 拿到 url+token,发 HTTP 请求。
-4. **server 读写存储**:落盘到 `~/.stash/`,返回结果给 cli,cli 打印给 AI,AI 转述用户。
+1. **AI 读 skill**:当用户说"把这段文字存起来"/"看看 den 里有什么",pi 匹配到 `skill/SKILL.md` 的 description,加载完整手册。
+2. **AI 调 cli**:按手册执行 `den push ...` / `den ls` 等。
+3. **cli 打 server**:cli 读 `~/.local/share/denrc` 拿到 url+token,发 HTTP 请求。
+4. **server 读写存储**:落盘到 `~/.local/share/den/`,返回结果给 cli,cli 打印给 AI,AI 转述用户。
 
 这样 AI 在任意设备(装了 cli+skill)都能读写同一份统一存储。
 
@@ -89,37 +89,37 @@ stash 由三个物理组件构成 **server / cli / skill**,形成完整闭环:
 
 三层独立目录,详见 `AGENTS.md`。核心约定:
 
-- `server/src/stash/` 是服务端业务模块,`server/src/` 根目录仅放 NestJS 脚手架文件 + 入口。
+- `server/src/den/` 是服务端业务模块,`server/src/` 根目录仅放 NestJS 脚手架文件 + 入口。
 - `cli/src/cli.ts` 是客户端实现,不 import 任何 NestJS 包。
 - `skill/SKILL.md` 的命令清单必须与 cli 实际命令同步,改 cli 必同步更新 skill 与 `docs/api.md`。
 - 存储逻辑全在 `store.ts`,不散落到 controller。
-- CLI 与 server **共享类型**通过各自定义对齐(当前 CLI 待建,类型见 `server/src/stash/types.ts`)。
+- CLI 与 server **共享类型**通过各自定义对齐(当前 CLI 待建,类型见 `server/src/den/types.ts`)。
 
 ## 5. 数据流
 
 ### 推送文本
 
 ```
-cli: POST /stash/text  { text: "...", source: "macmini" }
+cli: POST /den/text  { text: "...", source: "macmini" }
   → TokenGuard 校验
-  → StashController.pushText
-  → StashStore.addText → 生成 id,写入 files/<id>(blob)+ INSERT SQLite entries / entry_tags
+  → DenController.pushText
+  → DenStore.addText → 生成 id,写入 files/<id>(blob)+ INSERT SQLite entries / entry_tags
   ← 返回 { id, kind:'text', ... }
 ```
 
 ### 推送文件
 
 ```
-cli: POST /stash/file  multipart, field 'file' + 'source'
+cli: POST /den/file  multipart, field 'file' + 'source'
   → FileInterceptor 解析
-  → StashStore.addFile(buffer, originalname)
+  → DenStore.addFile(buffer, originalname)
   ← 返回 { id, kind:'file', name, size, ... }
 ```
 
 ### 下载
 
 ```
-cli: GET /stash/<id>/content?download=1
+cli: GET /den/<id>/content?download=1
   → 查找 entry,流式返回 blob
   → text 默认 inline,file 默认 attachment
 ```
@@ -127,7 +127,7 @@ cli: GET /stash/<id>/content?download=1
 ### 删除
 
 ```
-cli: DELETE /stash/<id>
+cli: DELETE /den/<id>
   → 从 index 移除 + 删除 blob 文件
 ```
 
@@ -137,7 +137,7 @@ cli: DELETE /stash/<id>
 |---|---|
 | 公网扫描 | 服务端默认只 bind Tailscale 接口 IP,不监听 0.0.0.0 |
 | 未授权访问 | 全局 TokenGuard,除 `/health`、`/` 外均需 Bearer token |
-| token 泄露 | token 以 `STASH_TOKEN` 环境变量为权威来源;未设置时启动自动生成一次并打印到日志(不落盘),供首次拷贝到各设备 `.stashrc`。token 不入仓库 |
+| token 泄露 | token 以 `DEN_TOKEN` 环境变量为权威来源;未设置时启动自动生成一次并打印到日志(不落盘),供首次拷贝到各设备 `~/.config/den/config.json`。token 不入仓库 |
 | 跨设备身份伪造 | `source` 字段为软标记(非强校验),用于列表展示来源 |
 
 > 说明:本方案假设**Tailscale 网络本身可信**。token 防的是网络内其他设备误触/扫描,而非对抗性攻击者。如需更强隔离,后续可加 mTLS。
@@ -145,9 +145,9 @@ cli: DELETE /stash/<id>
 ## 7. 部署模型
 
 - **单点部署**:服务端跑在腾讯云节点(<tailscale-ip>),常开、稳定。
-- **CLI 分发**:主路径是单文件——构建产物 `dist/stash.cjs`(esbuild 打包,带 shebang,零运行时依赖)用 `scp` 拷到各设备,直接 `node stash.cjs` 运行(目标机器只需 Node)。`npm link` 仅用于开发机装出 `stash` 命令,不是分发主路径。
-- **配置约定**:每个设备持有一份 `.stashrc`(`{ url, token }`),指向服务端。
-- **备份**:`~/.stash/` 整目录定期 `rsync` 到极空间或其他冷备即可。
+- **CLI 分发**:主路径是单文件——构建产物 `dist/den.cjs`(esbuild 打包,带 shebang,零运行时依赖)用 `scp` 拷到各设备,直接 `node den.cjs` 运行(目标机器只需 Node)。`npm link` 仅用于开发机装出 `den` 命令,不是分发主路径。
+- **配置约定**:每个设备持有一份 `~/.config/den/config.json`(`{ url, token }`),指向服务端。
+- **备份**:`~/.local/share/den/` 整目录定期 `rsync` 到极空间或其他冷备即可。
 - **单点说明**:server 是单点,挂掉期间所有设备读写中断;个人工具可接受,不做多副本。
 
 ## 8. 后续演进路线

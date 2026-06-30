@@ -2,11 +2,11 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BadRequestException, NotFoundException, StreamableFile } from '@nestjs/common';
-import { StashController } from './stash.controller';
-import { StashStore } from './store';
+import { DenController } from './den.controller';
+import { DenStore } from './store';
 import type { Entry } from './types';
 
-type MockedStore = jest.Mocked<StashStore>;
+type MockedStore = jest.Mocked<DenStore>;
 
 function mockStore(): MockedStore {
   return {
@@ -35,13 +35,13 @@ const fakeEntry = (over: Partial<Entry> = {}): Entry => ({
 
 const mkRes = () => ({ set: jest.fn() }) as never;
 
-describe('StashController', () => {
-  let controller: StashController;
+describe('DenController', () => {
+  let controller: DenController;
   let store: MockedStore;
 
   beforeEach(() => {
     store = mockStore();
-    controller = new StashController(store);
+    controller = new DenController(store);
   });
 
   // ---------- pushText ----------

@@ -5,7 +5,7 @@ export class AppController {
   /** 根路径,免鉴权,简易探活 */
   @Get()
   root() {
-    return { ok: true, service: 'stash' };
+    return { ok: true, service: 'den' };
   }
 
   /** 健康检查,免鉴权 */

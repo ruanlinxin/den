@@ -19,16 +19,16 @@
 | 组件 | 技术 | 说明 |
 |---|---|---|
 | server | NestJS 11 + TypeScript | HTTP API + SQLite 存储 |
-| 存储 | SQLite(better-sqlite3)+ 文件系统 blob | 元信息/标签入 `stash.db`;blob 留 `files/<id>` |
+| 存储 | SQLite(better-sqlite3)+ 文件系统 blob | 元信息/标签入 `den.db`;blob 留 `files/<id>` |
 | cli | 纯 TypeScript(单文件打包) | **绝不能引入 NestJS 运行时**,要能塞进任意设备 |
 | skill | pi skill(`SKILL.md`) | AI 的操作手册,描述何时触发、调用哪些命令 |
 | ID | `nanoid` 8 位 | 短、无序、URL 友好 |
-| 鉴权 | Bearer / X-Stash-Token | 单 token,`STASH_TOKEN` 环境变量为权威(未设时启动自动生成一次,打印到日志不落盘) |
+| 鉴权 | Bearer / X-Den-Token | 单 token,`DEN_TOKEN` 环境变量为权威(未设时启动自动生成一次,打印到日志不落盘) |
 
 ## 目录结构
 
 ```
-stash/
+den/
 ├── AGENTS.md              ← 你在这里
 ├── docs/                  ← 设计文档、接口清单、数据模型
 │   ├── design.md
@@ -36,11 +36,11 @@ stash/
 │   └── data-model.md
 ├── server/                ← 【层1】NestJS 服务端(存储 + HTTP API)
 │   └── src/
-│       ├── main.ts        ← 入口:监听 Tailscale 地址/端口;token 取自 STASH_TOKEN,未设时启动自动生成一次
-│       ├── app.module.ts  ← 根模块,装载 StashModule
-│       └── stash/         ← 核心业务模块
-│           ├── stash.module.ts
-│           ├── stash.controller.ts   ← HTTP 路由
+│       ├── main.ts        ← 入口:监听 Tailscale 地址/端口;token 取自 DEN_TOKEN,未设时启动自动生成一次
+│       ├── app.module.ts  ← 根模块,装载 DenModule
+│       └── den/          ← 核心业务模块
+│           ├── den.module.ts
+│           ├── den.controller.ts   ← HTTP 路由
 │           ├── store.ts              ← SQLite 存储后端 + TTL 定时清理
 │           ├── token.guard.ts        ← 鉴权守卫
 │           └── types.ts
@@ -59,7 +59,7 @@ AI agent  ──读取──►  skill/SKILL.md  (知道何时触发、调用哪
 cmd: den push -m "..."   ◄── cli/src/cli.ts
                           │
                           ▼ HTTP + Token
-                     server  ──► ~/.stash/ (统一存储)
+                     server  ──► ~/.local/share/den/ (统一存储)
 ```
 
 ## 常用命令
@@ -70,7 +70,7 @@ cd server
 npm run start:dev          # 热重载开发
 npm run build && npm start # 生产
 npm test                   # 单元测试(store/controller/guard)
-PORT=8080 STASH_TOKEN=xxx npm start
+PORT=8080 DEN_TOKEN=xxx npm start
 
 # CLI
 cd cli
@@ -90,12 +90,12 @@ ln -sf ../skill ~/.agents/skills/den   # 全局(所有项目可用)
 1. **CLI 零运行时依赖**:CLI 打包成单文件 JS,目标机器只要有 `node`。不要让 CLI import 任何 NestJS 包。
 2. **skill 与 cli 必须对齐**:skill 里的命令、参数、行为要和 cli 实际实现一致;改了 cli 命令,要同步更新 `skill/SKILL.md` 和 `docs/api.md`。
 3. **只监听 Tailscale 接口**:生产部署时服务端默认绑 Tailscale IP(如 `100.x.x.x`),不暴露公网。`main.ts` 负责探测绑定地址。
-4. **存储用 SQLite + 文件系统 blob**:元信息/标签存 `stash.db`(better-sqlite3,WAL 模式),blob 留 `files/<id>` 避免大文件拖慢查询。详见 `docs/data-model.md`。
+4. **存储用 SQLite + 文件系统 blob**:元信息/标签存 `den.db`(better-sqlite3,WAL 模式),blob 留 `files/<id>` 避免大文件拖慢查询。详见 `docs/data-model.md`。
 5. **写操作原子化**:`store.ts` 用 better-sqlite3 事务(blob 先写成功,再单事务 INSERT entries + entry_tags;删除先 DELETE cascade 再删 blob)。新增写路径要包在事务里。
 
 ## 数据位置
 
-- 默认:`~/.stash/`(可被 `STASH_DATA_DIR` 覆盖)
+- 默认:`~/.local/share/den/`(可被 `DEN_DATA_DIR` 覆盖)
 - 结构见 `docs/data-model.md`
 
 ## 文档导航

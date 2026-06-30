@@ -1,4 +1,4 @@
-# stash · 接口清单
+# den · 接口清单
 
 > Base URL: `http://<host>:<port>`（Tailscale 内网）
 > 所有非健康检查接口均需鉴权。
@@ -8,12 +8,12 @@
 通过请求头携带 token（二选一）：
 
 ```
-Authorization: Bearer <STASH_TOKEN>
+Authorization: Bearer <DEN_TOKEN>
 # 或
-X-Stash-Token: <STASH_TOKEN>
+X-Den-Token: <DEN_TOKEN>
 ```
 
-- token 来源：`STASH_TOKEN` 环境变量为权威来源；未设置时服务端启动自动生成一次并打印到日志（不落盘），供首次拷贝到各设备 `~/.stashrc`。
+- token 来源：`DEN_TOKEN` 环境变量为权威来源；未设置时服务端启动自动生成一次并打印到日志（不落盘），供首次拷贝到各设备 `~/.local/share/denrc`。
 - 以下路径**免鉴权**：`/`、`/health`、`/favicon.ico`。
 - 鉴权失败返回 `401 Unauthorized`（`{ statusCode, message }`）。
 
@@ -35,7 +35,7 @@ X-Stash-Token: <STASH_TOKEN>
 
 ## 2. 推送文本
 
-`POST /stash/text`
+`POST /den/text`
 
 **请求头**
 
@@ -56,7 +56,7 @@ Authorization: Bearer <token>
 **请求示例**
 
 ```bash
-curl -X POST http://<host>:<port>/stash/text \
+curl -X POST http://<host>:<port>/den/text \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"text":"一段想法","source":"macmini","tags":["note"],"ttl":3600}'
@@ -88,7 +88,7 @@ curl -X POST http://<host>:<port>/stash/text \
 
 ## 3. 推送文件
 
-`POST /stash/file`
+`POST /den/file`
 
 **请求头**
 
@@ -109,7 +109,7 @@ Authorization: Bearer <token>
 **请求示例**
 
 ```bash
-curl -X POST http://<host>:<port>/stash/file \
+curl -X POST http://<host>:<port>/den/file \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@/path/to/note.pdf" \
   -F "source=macmini"
@@ -138,7 +138,7 @@ curl -X POST http://<host>:<port>/stash/file \
 
 ## 4. 列表
 
-`GET /stash`
+`GET /den`
 
 **查询参数**
 
@@ -152,9 +152,9 @@ curl -X POST http://<host>:<port>/stash/file \
 
 ```bash
 # 全部
-curl http://<host>:<port>/stash -H "Authorization: Bearer $TOKEN"
+curl http://<host>:<port>/den -H "Authorization: Bearer $TOKEN"
 # 按标签
-curl 'http://<host>:<port>/stash?tag=note' -H "Authorization: Bearer $TOKEN"
+curl 'http://<host>:<port>/den?tag=note' -H "Authorization: Bearer $TOKEN"
 ```
 
 **响应**：`200 OK`（按 `createdAt` 降序）
@@ -180,12 +180,12 @@ curl 'http://<host>:<port>/stash?tag=note' -H "Authorization: Bearer $TOKEN"
 
 ## 5. 单条元信息
 
-`GET /stash/:id`
+`GET /den/:id`
 
 **请求示例**
 
 ```bash
-curl http://<host>:<port>/stash/aB3xK9pQ -H "Authorization: Bearer $TOKEN"
+curl http://<host>:<port>/den/aB3xK9pQ -H "Authorization: Bearer $TOKEN"
 ```
 
 **响应**：`200 OK`
@@ -209,7 +209,7 @@ curl http://<host>:<port>/stash/aB3xK9pQ -H "Authorization: Bearer $TOKEN"
 
 ## 6. 下载原始内容
 
-`GET /stash/:id/content`
+`GET /den/:id/content`
 
 **查询参数**
 
@@ -228,10 +228,10 @@ curl http://<host>:<port>/stash/aB3xK9pQ -H "Authorization: Bearer $TOKEN"
 
 ```bash
 # 文本：直接打印
-curl http://<host>:<port>/stash/aB3xK9pQ/content -H "Authorization: Bearer $TOKEN"
+curl http://<host>:<port>/den/aB3xK9pQ/content -H "Authorization: Bearer $TOKEN"
 
 # 文件：下载到本地
-curl -OJ http://<host>:<port>/stash/Mn2vR8wL/content -H "Authorization: Bearer $TOKEN"
+curl -OJ http://<host>:<port>/den/Mn2vR8wL/content -H "Authorization: Bearer $TOKEN"
 ```
 
 **错误**：`404` ID 不存在或 blob 文件缺失。
@@ -240,12 +240,12 @@ curl -OJ http://<host>:<port>/stash/Mn2vR8wL/content -H "Authorization: Bearer $
 
 ## 7. 删除
 
-`DELETE /stash/:id`
+`DELETE /den/:id`
 
 **请求示例**
 
 ```bash
-curl -X DELETE http://<host>:<port>/stash/aB3xK9pQ -H "Authorization: Bearer $TOKEN"
+curl -X DELETE http://<host>:<port>/den/aB3xK9pQ -H "Authorization: Bearer $TOKEN"
 ```
 
 **响应**：`200 OK`
@@ -262,7 +262,7 @@ curl -X DELETE http://<host>:<port>/stash/aB3xK9pQ -H "Authorization: Bearer $TO
 
 ### 追加标签
 
-`POST /stash/:id/tags`
+`POST /den/:id/tags`
 
 **请求体**
 
@@ -278,7 +278,7 @@ curl -X DELETE http://<host>:<port>/stash/aB3xK9pQ -H "Authorization: Bearer $TO
 
 ### 删除单个标签
 
-`DELETE /stash/:id/tags/:tag`
+`DELETE /den/:id/tags/:tag`
 
 `tag` 路径段需 URL 编码（中文 / 特殊字符）。
 
@@ -295,7 +295,7 @@ NestJS 默认异常过滤器返回：
 ```json
 {
   "statusCode": 404,
-  "message": "Cannot GET /stash/xxx",
+  "message": "Cannot GET /den/xxx",
   "error": "Not Found"
 }
 ```
@@ -307,11 +307,11 @@ NestJS 默认异常过滤器返回：
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | GET | `/health` | ❌ | 健康检查 |
-| POST | `/stash/text` | ✅ | 推送文本 |
-| POST | `/stash/file` | ✅ | 推送文件 |
-| GET | `/stash` | ✅ | 列表 |
-| GET | `/stash/:id` | ✅ | 单条元信息 |
-| GET | `/stash/:id/content` | ✅ | 下载内容 |
-| DELETE | `/stash/:id` | ✅ | 删除 |
-| POST | `/stash/:id/tags` | ✅ | 追加标签 |
-| DELETE | `/stash/:id/tags/:tag` | ✅ | 删除单个标签 |
+| POST | `/den/text` | ✅ | 推送文本 |
+| POST | `/den/file` | ✅ | 推送文件 |
+| GET | `/den` | ✅ | 列表 |
+| GET | `/den/:id` | ✅ | 单条元信息 |
+| GET | `/den/:id/content` | ✅ | 下载内容 |
+| DELETE | `/den/:id` | ✅ | 删除 |
+| POST | `/den/:id/tags` | ✅ | 追加标签 |
+| DELETE | `/den/:id/tags/:tag` | ✅ | 删除单个标签 |

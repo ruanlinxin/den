@@ -16,11 +16,11 @@ describe('TokenGuard', () => {
 
   beforeEach(() => {
     guard = new TokenGuard();
-    process.env.STASH_TOKEN = REAL_TOKEN;
+    process.env.DEN_TOKEN = REAL_TOKEN;
   });
 
   afterEach(() => {
-    delete process.env.STASH_TOKEN;
+    delete process.env.DEN_TOKEN;
   });
 
   it('免鉴权路径直接放行(无需 token)', () => {
@@ -34,7 +34,7 @@ describe('TokenGuard', () => {
   });
 
   it('保护路径 token 不匹配抛 UnauthorizedException', () => {
-    expect(() => guard.canActivate(mkCtx('/stash', { 'x-stash-token': 'wrong' }))).toThrow(
+    expect(() => guard.canActivate(mkCtx('/stash', { 'x-den-token': 'wrong' }))).toThrow(
       UnauthorizedException,
     );
     expect(() =>
@@ -43,7 +43,7 @@ describe('TokenGuard', () => {
   });
 
   it('X-Stash-Token 正确放行', () => {
-    expect(guard.canActivate(mkCtx('/stash', { 'x-stash-token': REAL_TOKEN }))).toBe(true);
+    expect(guard.canActivate(mkCtx('/stash', { 'x-den-token': REAL_TOKEN }))).toBe(true);
   });
 
   it('Authorization: Bearer 正确放行(Bearer 大小写不敏感)', () => {
