@@ -372,4 +372,60 @@ describe('den e2e (HTTP 全链路)', () => {
       expect(r.body.expiresAt).toBeNull();
     });
   });
+
+  // ---------- 跨设备编码(中文 / emoji / NFD) ----------
+
+  describe('跨设备编码', () => {
+    it('中文文件名 push → server name 保持 UTF-8(multer defParamCharset=utf8)', async () => {
+      const r = await request(app.getHttpServer())
+        .post('/den/file')
+        .set('Authorization', bearer())
+        .attach('file', Buffer.from('PDF'), '中文报告.pdf');
+      expect(r.status).toBe(201);
+      expect(r.body.name).toBe('中文报告.pdf');
+    });
+
+    it('emoji 文件名 + 混合字符', async () => {
+      const r = await request(app.getHttpServer())
+        .post('/den/file')
+        .set('Authorization', bearer())
+        .attach('file', Buffer.from('X'), '🚀 rocket 笔记.txt');
+      expect(r.status).toBe(201);
+      expect(r.body.name).toBe('🚀 rocket 笔记.txt');
+    });
+
+    it('NFD 形式(é = e + combining acute)被规范化到 NFC', async () => {
+      // NFD 形式的 "café":c, a, f, e(U+0065) + ́ (U+0301)
+      const nfd = 'café';
+      const nfdString = nfd.normalize('NFD');
+      // 验证确实是 NFD(é 分解成 2 个 codepoint)
+      expect(nfdString.length).toBeGreaterThan(nfd.length);
+      const r = await request(app.getHttpServer())
+        .post('/den/file')
+        .set('Authorization', bearer())
+        .attach('file', Buffer.from('X'), nfdString);
+      expect(r.status).toBe(201);
+      // server 存的是 NFC
+      expect(r.body.name).toBe(nfd.normalize('NFC'));
+    });
+
+    it('Content-Disposition 用 RFC 5987 双形式(中文/emoji 文件名)', async () => {
+      const push = await request(app.getHttpServer())
+        .post('/den/file')
+        .set('Authorization', bearer())
+        .attach('file', Buffer.from('PDF'), '中文报告.pdf');
+      const r = await request(app.getHttpServer())
+        .get(`/den/${push.body.id}/content`)
+        .set('Authorization', bearer());
+      expect(r.status).toBe(200);
+      const cd = r.headers['content-disposition'];
+      // 验证双形式都存在
+      expect(cd).toMatch(/filename="[^"]*"/);  // ASCII fallback(中文被 _ 替换)
+      expect(cd).toMatch(/filename\*=UTF-8''/);
+      // ASCII fallback 中每个非 ASCII 字符被替换为 _("中文报告" 4 字符 → 4 个 _)
+      expect(cd).toMatch(/filename="____\.pdf"/);
+      // filename* 中是 percent-encoded 的 UTF-8
+      expect(cd).toContain(encodeURIComponent('中文报告.pdf'));
+    });
+  });
 });

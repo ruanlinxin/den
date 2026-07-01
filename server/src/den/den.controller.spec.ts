@@ -169,7 +169,9 @@ describe('DenController', () => {
         expect.objectContaining({ 'Content-Type': 'text/plain; charset=utf-8' }),
       );
       expect(r1.set).toHaveBeenCalledWith(
-        expect.objectContaining({ 'Content-Disposition': 'inline; filename="text.txt"' }),
+        expect.objectContaining({
+          'Content-Disposition': expect.stringMatching(/^inline; filename="text\.txt"; filename\*=/),
+        }),
       );
       // file
       (store.get as jest.Mock).mockReturnValue(fakeEntry({ kind: 'file', name: 'a.pdf' }));
@@ -179,7 +181,9 @@ describe('DenController', () => {
         expect.objectContaining({ 'Content-Type': 'application/octet-stream' }),
       );
       expect(r2.set).toHaveBeenCalledWith(
-        expect.objectContaining({ 'Content-Disposition': 'attachment; filename="a.pdf"' }),
+        expect.objectContaining({
+          'Content-Disposition': expect.stringMatching(/^attachment; filename="a\.pdf"; filename\*=/),
+        }),
       );
     });
 
@@ -189,12 +193,16 @@ describe('DenController', () => {
       const r1 = mkRes();
       await controller.content('abc', '1', r1);
       expect(r1.set).toHaveBeenCalledWith(
-        expect.objectContaining({ 'Content-Disposition': 'attachment; filename="text.txt"' }),
+        expect.objectContaining({
+          'Content-Disposition': expect.stringMatching(/^attachment; filename="text\.txt"; filename\*=/),
+        }),
       );
       const r0 = mkRes();
       await controller.content('abc', '0', r0);
       expect(r0.set).toHaveBeenCalledWith(
-        expect.objectContaining({ 'Content-Disposition': 'inline; filename="text.txt"' }),
+        expect.objectContaining({
+          'Content-Disposition': expect.stringMatching(/^inline; filename="text\.txt"; filename\*=/),
+        }),
       );
     });
   });

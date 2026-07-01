@@ -290,7 +290,45 @@ curl -X DELETE http://<host>:<port>/den/aB3xK9pQ -H "Authorization: Bearer $TOKE
 
 ---
 
-## 9. 统一错误格式
+## 9. 跨设备文件编码
+
+den 在多台设备(macOS / Linux / Windows)互传文件,文件名编码走三层防护:
+
+### 9.1 接收(FileInterceptor `defParamCharset=utf8`)
+
+multer 默认按 `latin1` 解 multipart `filename` 字段,中文/emoji 会变 mojibake。
+设 `defParamCharset: 'utf8'` 后,中文/emoji 文件名 push 进去在 server 端保持正确 UTF-8。
+
+### 9.2 存储(store.name `.normalize('NFC')`)
+
+macOS 文件系统用 NFD(规范化分解),Linux/Windows 普遍用 NFC(规范化合成)。
+同一字符"é"在 macOS 上是 2 个 codepoint(`e` + combining acute),在 Linux/Windows 是 1 个。
+在 `addFile` 里统一收敛到 NFC,跨设备不会"看起来一样但实际字节不同"。
+
+### 9.3 响应(`Content-Disposition` RFC 5987)
+
+```
+Content-Disposition: attachment; filename="__.pdf"; filename*=UTF-8''%E4%B8%AD%E6%96%87%E6%8A%A5%E5%91%8A.pdf
+```
+
+- `filename="<ASCII fallback>"` 给老客户端(中文/emoji 替换为 `_`)
+- `filename*=UTF-8''<percent-encoded>` 给现代客户端(浏览器、curl、Safari、Edge 都识别)
+
+### 9.4 Windows 推送 CLI(GBK mojibake 反向修复)
+
+Windows 中文系统 + PowerShell 5 / cmd 的代码页是 GBK,process.argv 收到的路径是
+GBK 字节被 UTF-8 误解码后的 mojibake 字符串(如 `ÖÐÎÄ.txt`)。`fs.readFile` 会 ENOENT。
+
+CLI 在 `readFile 失败 + platform === 'win32'` 时,尝试:
+1. 把 JS 字符串的每个 charCode 拼回 latin1 字节序列
+2. 按 GBK 解码
+3. 重试 readFile
+
+仅在首次失败时尝试,不影响正常路径。如果仍然失败,提示用户跑 `chcp 65001` 切到 UTF-8 代码页。
+
+---
+
+## 10. 统一错误格式
 
 NestJS 默认异常过滤器返回：
 

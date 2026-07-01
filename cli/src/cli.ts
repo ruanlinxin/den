@@ -228,6 +228,66 @@ export async function readJson(res: Response): Promise<any> {
 
 // ---------- stdin ----------
 
+/**
+ * 读本地文件,自动尝试 Windows GBK → UTF-8 反向修复。
+ *
+ * 场景:Windows 中文系统用 cmd / PowerShell 5 跳 den(GBK 代码页),
+ *      process.argv 收到的路径是 GBK 字节被 UTF-8 误解码后的 mojibake(如 "ä¸­æ–‡.txt")。
+ *      原生 readFile 会 ENOENT。
+ * 修复:把 JS 字符串的每个 charCode 重新拼为 latin1 字节,再按 GBK 解码还原。
+ *      只在首次 readFile 报 ENOENT 时尝试,不打扰正常路径(避免误修)。
+ */
+export async function readFileWithEncodingFallback(p: string): Promise<Buffer> {
+  try {
+    return await fs.readFile(p);
+  } catch (e: any) {
+    if (process.platform === 'win32' && e?.code === 'ENOENT') {
+      const fixed = gbkMojibakeToUtf8(p);
+      if (fixed && fixed !== p) {
+        try {
+          return await fs.readFile(fixed);
+        } catch {
+          // fall through
+        }
+      }
+    }
+    throw e;
+  }
+}
+
+/**
+ * 把 "GBK 字节被 UTF-8 误解码" 的 JS 字符串还原回 GBK → UTF-8 正确字符串。
+ * 启发:GBK 编码的中文会在 UTF-8 误解码后变成连续 \u00xx 字符(每个原 GBK 字节变成一个
+ * latin1 字符);原 UTF-8 字符串几乎不会含这种模式。检测后用 TextDecoder('gbk') 反解。
+ */
+export function gbkMojibakeToUtf8(s: string): string | null {
+  // 启发式:大量字符落在 Latin-1 Supplement 范围(0x80-0xFF)时,才当 mojibake 处理
+  let suspicious = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0x80 && c <= 0xff) suspicious++;
+  }
+  if (suspicious < s.length * 0.3) return null; // 不像 mojibake
+  try {
+    // 把 JS 字符串看作"已经被 latin1 解码的字节流",还原成 Buffer,再按 GBK 解码
+    const bytes = Buffer.alloc(s.length);
+    for (let i = 0; i < s.length; i++) {
+      bytes[i] = s.charCodeAt(i) & 0xff;
+    }
+    const decoded = new TextDecoder('gbk', { fatal: true }).decode(bytes);
+    // 验证解码后不再含大量 latin1 字符(说明真的是 GBK 而非巧合)
+    let stillSus = 0;
+    for (let i = 0; i < decoded.length; i++) {
+      const c = decoded.charCodeAt(i);
+      if (c >= 0x80 && c <= 0xff) stillSus++;
+    }
+    if (stillSus > decoded.length * 0.1) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 export async function readStdin(): Promise<string> {
   let data = '';
   process.stdin.setEncoding('utf8');
@@ -302,7 +362,7 @@ export async function cmdPush(cfg: Config, args: string[]): Promise<void> {
     if (!file) {
       die(1, '用法: den push <file> 或 den push -m "<文本>"');
     }
-    const buf = await fs.readFile(file);
+    const buf = await readFileWithEncodingFallback(file);
     const form = new FormData();
     form.append('file', new Blob([buf]), path.basename(file));
     form.append('source', source);

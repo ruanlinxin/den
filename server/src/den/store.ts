@@ -194,7 +194,10 @@ export class DenStore implements OnModuleInit, OnModuleDestroy {
     ttl?: number,
     tags?: string[],
   ): Promise<Entry> {
-    const name = originalname || `file-${Date.now()}`;
+    // macOS 文件系统用 NFD(规范化分解),Linux/Windows 普遍用 NFC(规范化合成)。
+    // 跨设备传文件时不做规范化会出现"看起来一样但实际字节不同"的不一致;
+    // 在 server 端统一收敛到 NFC,客户端不必关心。
+    const name = (originalname || `file-${Date.now()}`).normalize('NFC');
     return this.create('file', name, buf, source, ttl, tags);
   }
 

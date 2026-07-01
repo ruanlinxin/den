@@ -55,6 +55,7 @@ den 让你在任意设备上把**文本或文件**推送到一个统一的自托
 
 ## 注意事项
 
+- **跨设备文件编码**:macOS(默认 NFD)与 Linux/Windows(NFC)对同一字符可能用不同 Unicode 规范化形式;den 在 server 端统一收敛到 NFC,跨设备不会"看起来一样但字节不同"。中文/emoji 文件名通过 `defParamCharset=utf8` + RFC 5987 `Content-Disposition` 双形式兼容。
 - **有效期 / 标签**：`push` 可带 `--ttl`（单位 `s/m/h/d/w`，纯数字=秒）和 `--tags`（逗号分隔）。已过期条目不会出现在 `ls` / `get`（视为不存在）。
 - 大文件（>100MB）不建议走 den；先提示用户。
 - `source` 字段会自动带本机主机名，列表里可用于区分来源。

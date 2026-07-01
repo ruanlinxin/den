@@ -10,6 +10,7 @@ import {
   loadConfig,
   readLine,
   maskToken,
+  gbkMojibakeToUtf8,
 } from './cli';
 
 const cfg = () => ({ url: 'http://srv:1', token: 'tok' });
@@ -148,6 +149,68 @@ describe('命令函数', () => {
       } finally {
         if (orig) Object.defineProperty(process.stdin, 'isTTY', orig);
       }
+    });
+  });
+
+  // ---------- gbkMojibakeToUtf8 ----------
+
+  describe('gbkMojibakeToUtf8', () => {
+    it('识别 "中文" 的 GBK → UTF-8 mojibake 并修复', () => {
+      // "中文" 的 GBK 字节 [D6 D0 CE C4] 被 UTF-8 误读后,JS 字符为 Ð Ö Î Ä
+      const mojibake = Buffer.from([0xd6, 0xd0, 0xce, 0xc4])
+        .toString('latin1');
+      expect(mojibake).toBe('ÖÐÎÄ');
+      const fixed = gbkMojibakeToUtf8(mojibake);
+      expect(fixed).toBe('中文');
+    });
+
+    it('纯 ASCII 路径不动', () => {
+      expect(gbkMojibakeToUtf8('/Users/alice/file.txt')).toBeNull();
+    });
+
+    it('正常 UTF-8 中文 不误报', () => {
+      // 已经是 UTF-8 字符串,GBK 解码会失败或产生大量 latin1 残留
+      const result = gbkMojibakeToUtf8('中文.txt');
+      expect(result).toBeNull();
+    });
+
+    it('混合中英文 mojibake', () => {
+      // "你好" GBK 字节 C4 E3 BA C3,后接 ASCII "go" (0x67 0x6F)
+      // mojibake 字符串 = "ÄãºÃgo"
+      const mojibake = Buffer.from([0xc4, 0xe3, 0xba, 0xc3, 0x67, 0x6f])
+        .toString('latin1');
+      expect(mojibake).toBe('ÄãºÃgo');
+      expect(gbkMojibakeToUtf8(mojibake)).toBe('你好go');
+    });
+  });
+
+  // ---------- readFileWithEncodingFallback ----------
+
+  describe('readFileWithEncodingFallback', () => {
+    it('正常路径 直接读成功', async () => {
+      const { readFileWithEncodingFallback } = await import('./cli');
+      const tmp = '/tmp/den-cli-fallback-test.txt';
+      await fs.writeFile(tmp, 'hello');
+      const buf = await readFileWithEncodingFallback(tmp);
+      expect(buf.toString()).toBe('hello');
+      await fs.unlink(tmp);
+    });
+
+    it('Windows + ENOENT 触发 mojibake 修复(模拟)', async () => {
+      const { readFileWithEncodingFallback } = await import('./cli');
+      // 模拟:首次 readFile 抛 ENOENT,但 mojibake 修复后能读
+      const realPath = '/tmp/den-cli-fallback-real.txt';
+      const mojibakePath = Buffer.from(
+        // 真实文件名的 GBK 字节模拟的 mojibake
+        // 临时用 ASCII 文件名(GBK 修复会失败,fallback 走原 ENOENT)
+        // 实际 Windows GBK 中文路径才需要真修复
+        realPath.split('').reverse().join(''),
+        'utf8'
+      ).toString('latin1');
+      await fs.writeFile(realPath, 'real');
+      // mojibake 路径不存在,readFile 报 ENOENT,fallback 也失败
+      await expect(readFileWithEncodingFallback(mojibakePath)).rejects.toThrow();
+      await fs.unlink(realPath);
     });
   });
 

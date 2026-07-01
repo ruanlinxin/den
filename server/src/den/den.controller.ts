@@ -69,6 +69,9 @@ export class DenController {
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 100 * 1024 * 1024 }, // 100MB / 文件,与 api.md 一致
+      // multer 默认按 latin1 解 multipart filename 字段,中文/emoji 会变 mojibake。
+      // 设为 utf8 后,multer 会按 UTF-8 解码,跨设备文件名一致。
+      defParamCharset: 'utf8',
     }),
   )
   async pushFile(
@@ -126,10 +129,17 @@ export class DenController {
 
     const asAttachment = download !== undefined && download !== '0' && download !== 'false';
     const dispositionType = asAttachment || entry.kind === 'file' ? 'attachment' : 'inline';
+    // RFC 5987 / RFC 6266 双形式:
+    //   filename="<ASCII fallback>" 给老客户端(中文用 '_' 代替)
+    //   filename*=UTF-8''<percent-encoded> 给现代客户端(浏览器、curl 都识别)
+    // 跨设备下载 Windows 资源管理器 / macOS Safari 都不会再乱码。
+    const asciiFallback = entry.name.replace(/[^\x20-\x7E]/g, '_') || 'download';
+    const encodedName = encodeURIComponent(entry.name);
     res.set({
       'Content-Type':
         entry.kind === 'text' ? 'text/plain; charset=utf-8' : 'application/octet-stream',
-      'Content-Disposition': `${dispositionType}; filename="${encodeURIComponent(entry.name)}"`,
+      'Content-Disposition':
+        `${dispositionType}; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
       'Content-Length': String(entry.size),
     });
     const stream = createReadStream(this.store.filePath(id));

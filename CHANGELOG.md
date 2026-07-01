@@ -28,6 +28,7 @@ server 与 cli 共享同一版本号(同一发布)。
 - 请求体 1MB、单文件 100MB 上限,超出返回 413(express 错误中间件翻译)
 - WAL + foreign_keys,写路径单事务
 - TokenGuard:免鉴权路径 `/`、`/health`、`/favicon.ico`
+- 跨设备文件名编码三层防护:`defParamCharset=utf8` 接收 + NFC 规范化存储 + RFC 5987 `Content-Disposition` 响应
 
 ### CLI
 - 纯 TypeScript,esbuild 打包单文件 `dist/den.cjs`,**零运行时依赖**
@@ -38,6 +39,7 @@ server 与 cli 共享同一版本号(同一发布)。
 - `den config show` 时 token 打码(前 2 字符 + `***`)
 - fetch 默认 30s timeout(`DEN_TIMEOUT_MS` 可覆盖)
 - TTL 单位 `s/m/h/d/w`,纯数字=秒
+- Windows 推送 GBK mojibake 反向修复(`process.platform === 'win32'` 时按需)
 
 ### Skill
 - pi skill 描述 `推送、查看、下载、删除跨设备暂存的文本或文件`
@@ -46,6 +48,6 @@ server 与 cli 共享同一版本号(同一发布)。
 
 ### 测试
 - server 单元测试 50(用真实 SQLite,覆盖 CRUD/TTL/CASCADE/ID 冲突)
-- server 端到端测试 27(supertest 跑完整 HTTP 链路,含鉴权、上限、TTL)
-- cli 单元测试 49(纯函数 + 命令 mock fetch)
-- 合计 **126 测试全过**,`tsc --noEmit` 双端 0 错误
+- server 端到端测试 31(supertest 跑完整 HTTP 链路,含鉴权、上限、TTL、跨设备编码)
+- cli 单元测试 55(纯函数 + 命令 mock fetch + GBK mojibake 反向解码)
+- 合计 **136 测试全过**,`tsc --noEmit` 双端 0 错误
